@@ -1,0 +1,1 @@
+pyinstaller src/transcriptiontool.py --onefile --noconsoledeactivate

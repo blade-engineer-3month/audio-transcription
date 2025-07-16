@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "音声文字起こし実行",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transcriptiontool.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}

@@ -20,14 +20,15 @@ class AudioTranscriberApp(TkinterDnD.Tk):
     def __init__(self):
         super().__init__()
         self.title("音声文字起こし")
-        self.geometry("600x300")
+        self.geometry("600x350")
         self.configure(bg="#f0f0f0")
         self.cancel_flag = False
+        self.chunk_seconds = 300  # 5分ごと分割
         self.create_widgets()
 
     def create_widgets(self):
-        tk.Label(self, text="音声ファイルを選択またはドラッグ＆ドロップ",
-                 font=("Arial", 12, "bold"), bg="#f0f0f0").pack(pady=10)
+        tk.Label(self, text="音声/動画ファイルを選択またはドラッグ＆ドロップ",
+                 font=("Arial", 12, "bold"), bg="#f0f0f0").pack(pady=12)
 
         self.entry_file = tk.Entry(self, width=60, font=("Arial", 10))
         self.entry_file.pack(pady=5)
@@ -36,7 +37,7 @@ class AudioTranscriberApp(TkinterDnD.Tk):
 
         frame = tk.Frame(self, bg="#f0f0f0")
         frame.pack(pady=5)
-        tk.Button(frame, text="参照...", command=self.select_file).pack(side=tk.LEFT, padx=5)
+        tk.Button(frame, text="参照...", command=self.select_files).pack(side=tk.LEFT, padx=5)
 
         self.var_txt = tk.BooleanVar(value=True)
         self.var_docx = tk.BooleanVar(value=True)
@@ -58,16 +59,16 @@ class AudioTranscriberApp(TkinterDnD.Tk):
         self.entry_file.delete(0, tk.END)
         self.entry_file.insert(0, path)
 
-    def select_file(self):
-        filepath = filedialog.askopenfilename(filetypes=[("Audio Files", "*.mp3 *.m4a *.wav *.ogg")])
+    def select_files(self):
+        filepaths = filedialog.askopenfilenames(filetypes=[("Audio/Video Files", "*.mp3 *.m4a *.wav *.ogg *.mp4 *.avi *.mov *.wmv")])
         self.entry_file.delete(0, tk.END)
-        self.entry_file.insert(0, filepath)
+        self.entry_file.insert(0, " ".join(filepaths))
 
     def start_transcription(self):
         self.cancel_flag = False
         self.start_btn["state"] = "disabled"
         self.cancel_btn["state"] = "normal"
-        threading.Thread(target=self.transcribe_file).start()
+        threading.Thread(target=self.transcribe_files).start()
 
     def cancel_process(self):
         self.cancel_flag = True
@@ -77,7 +78,7 @@ class AudioTranscriberApp(TkinterDnD.Tk):
             text = re.sub(r'([。\.])\s*', r'\1\n\n', text)
         return text.strip()
 
-    def split_audio(self, y, sr, chunk_seconds=1800):
+    def split_audio(self, y, sr, chunk_seconds=300):
         total_seconds = int(len(y) / sr)
         chunks = []
         for start_sec in range(0, total_seconds, chunk_seconds):
@@ -87,41 +88,88 @@ class AudioTranscriberApp(TkinterDnD.Tk):
             chunks.append(y[start_sec * sr:end_sec * sr])
         return chunks
 
-    def transcribe_file(self):
-        filepath = self.entry_file.get()
-        if not filepath or not os.path.isfile(filepath):
-            messagebox.showerror("エラー", "音声ファイルを選択してください。")
-            return
+    def transcribe_files(self):
+        filepaths = self.entry_file.get().split()
+        audio_files = [path for path in filepaths if path.lower().endswith((".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".avi", ".mov", ".wmv"))]
 
-        self.progress_bar["value"] = 10
-        self.update_idletasks()
+        # 全体チャンク数カウント（進捗バー計算用）
+        all_chunks = 0
+        chunk_counts = {}
+        for path in audio_files:
+            y, sr = self.load_audio_file(path)
+            if y is None:
+                continue
+            chunks = self.split_audio(y, sr, chunk_seconds=self.chunk_seconds)
+            chunk_counts[path] = len(chunks)
+            all_chunks += len(chunks)
 
-        FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
-        filename, ext = os.path.splitext(filepath)
-        if ext.lower() == ".m4a":
-            mp3_file = filename + ".mp3"
-            subprocess.call([FFMPEG_PATH, '-y', '-i', filepath, mp3_file])
-            filepath = mp3_file
-
-        y, sr = librosa.load(filepath, sr=16000)
-        y_clean = nr.reduce_noise(y, sr=sr, stationary=True)
-        chunks = self.split_audio(y_clean, sr, chunk_seconds=1800)
-        if self.cancel_flag:
+        if all_chunks == 0:
             self.reset_buttons()
             return
 
+        done_chunks = 0
         model = whisper.load_model("small")
+
+        for filepath in audio_files:
+            if self.cancel_flag:
+                break
+            done_chunks = self.transcribe_file(filepath, model, all_chunks, done_chunks, chunk_counts[filepath])
+
+        self.reset_buttons()
+
+    def load_audio_file(self, filepath):
+        FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
+        folder = os.path.dirname(filepath)
+        filename_noext = os.path.splitext(os.path.basename(filepath))[0]
+        mp3_file = os.path.join(folder, f"{filename_noext}_convert.mp3")
+
+        if os.path.splitext(filepath)[1].lower() in [".m4a", ".mp4", ".avi", ".mov", ".wmv"]:
+            # ★ コマンドを文字列にしてダブルクォーテーションで囲む
+            command = f'"{FFMPEG_PATH}" -y -i "{filepath}" "{mp3_file}"'
+            result = subprocess.run(command, shell=True, capture_output=True)
+            if result.returncode != 0:
+                messagebox.showerror("変換失敗", f"ffmpegエラー:\n{result.stderr.decode('utf-8')}")
+                return None, None
+            filepath = mp3_file
+
+        if not os.path.exists(filepath):
+            messagebox.showerror("エラー", f"ファイルが存在しません:\n{filepath}")
+            return None, None
+
+        y, sr = librosa.load(filepath, sr=16000)
+        y_clean = nr.reduce_noise(y, sr=sr, stationary=True)
+
+        # 一時ファイル削除
+        if filepath.endswith("_convert.mp3"):
+            os.remove(filepath)
+
+        return y_clean, sr
+
+
+    def transcribe_file(self, filepath, model, all_chunks, done_chunks, current_file_chunks):
+        y, sr = self.load_audio_file(filepath)
+        if y is None:
+            return done_chunks
+        chunks = self.split_audio(y, sr, chunk_seconds=self.chunk_seconds)
+        if self.cancel_flag:
+            return done_chunks
+
         all_text = ""
         for idx, chunk in enumerate(chunks):
             if self.cancel_flag:
-                self.reset_buttons()
-                return
+                return done_chunks
             temp_wav = f"temp_chunk_{idx}.wav"
-            sf.write(temp_wav, chunk, sr)
-            result = model.transcribe(temp_wav, fp16=False)
-            all_text += result["text"].strip() + "\n\n"
-            os.remove(temp_wav)
-            self.progress_bar["value"] = 10 + (80 / len(chunks)) * (idx + 1)
+            try:
+                sf.write(temp_wav, chunk, sr)
+                result = model.transcribe(temp_wav, fp16=False)
+                all_text += result["text"].strip() + "\n\n"
+            finally:
+                if os.path.exists(temp_wav):
+                    os.remove(temp_wav)
+
+            done_chunks += 1
+            progress = 100 * done_chunks / all_chunks
+            self.progress_bar["value"] = progress
             self.update_idletasks()
 
         formatted_text = self.split_paragraphs(all_text)
@@ -130,11 +178,22 @@ class AudioTranscriberApp(TkinterDnD.Tk):
         base_name = os.path.splitext(os.path.basename(filepath))[0]
         base_output = f"{base_name}_{dt_str}"
 
+        # ファイル名重複チェック
+        def get_nonexistent_path(path, ext):
+            i = 1
+            candidate = f"{path}.{ext}"
+            while os.path.exists(candidate):
+                candidate = f"{path}_{i}.{ext}"
+                i += 1
+            return candidate
+
         if self.var_txt.get():
-            with open(os.path.join(folder, f"{base_output}.txt"), "w", encoding="utf-8") as f:
+            txt_path = get_nonexistent_path(os.path.join(folder, base_output), "txt")
+            with open(txt_path, "w", encoding="utf-8") as f:
                 f.write(formatted_text)
 
         if self.var_docx.get():
+            docx_path = get_nonexistent_path(os.path.join(folder, base_output), "docx")
             doc = Document()
             section = doc.sections[0]
             section.top_margin = Inches(1)
@@ -148,11 +207,9 @@ class AudioTranscriberApp(TkinterDnD.Tk):
             for paragraph in formatted_text.split("\n\n"):
                 para = doc.add_paragraph(paragraph)
                 para.style = doc.styles["Normal"]
-            doc.save(os.path.join(folder, f"{base_output}.docx"))
-
-        self.progress_bar["value"] = 100
-        self.reset_buttons()
+            doc.save(docx_path)
         messagebox.showinfo("完了", f"文字起こしが完了しました。\n保存先：\n{folder}")
+        return done_chunks
 
     def reset_buttons(self):
         self.start_btn["state"] = "normal"
@@ -160,5 +217,6 @@ class AudioTranscriberApp(TkinterDnD.Tk):
         self.progress_bar["value"] = 0
 
 
-app = AudioTranscriberApp()
-app.mainloop()
+if __name__ == "__main__":
+    app = AudioTranscriberApp()
+    app.mainloop()

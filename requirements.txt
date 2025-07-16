@@ -1,0 +1,8 @@
+tk
+tkinterdnd2
+git+https://github.com/openai/whisper.git
+librosa
+soundfile
+noisereduce
+python-docx
+ffmpeg-python

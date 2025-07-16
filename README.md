@@ -3,7 +3,8 @@
 ## 主な機能一覧
 | 機能カテゴリ     | 内容                                                             |
 |------------|----------------------------------------------------------------|
-| 入力対応       | mp3 / m4a / wav / ogg に対応（m4a → mp3変換は自動実行）                                 |
+| 入力対応       | mp3 / m4a / wav / ogg / mp4 / avi / mov /wnv                                 |
+| 自動変換       | 
 | ノイズ除去     | 音声ファイルを自動でノイズ除去（noisereduceライブラリ使用）                                   |
 | 言語対応       | **自動言語検出、日本語・英語混在対応**（Whisperモデル small 使用）                                   |
 | 分割処理       | 長時間ファイルを自動分割（30分ごと・カスタマイズ可）                                         |
@@ -33,17 +34,39 @@
 
 ---
 
-## セットアップ方法（環境構築手順）
-### 1 必要ライブラリのインストール（1回だけ）
-```bash
-pip install tkinterdnd2 whisper python-docx noisereduce librosa soundfile
+## セットアップ方法
+1. Pythonのインストールを行う。
 
-### 2 ffmpegの準備（1回だけ）
+公式サイト: python.org
 
-- ffmpegをダウンロード：https://ffmpeg.org/download.html  
-- `C:\ffmpeg\bin\ffmpeg.exe` に配置（または自分の環境に合わせて変更）  
+2. 必要なライブラリのインストール
+コマンドプロンプトやターミナルを開き、以下のコマンドを実行して、必要なライブラリをインストールする
+pip install tkinterdnd2 whisper python-docx soundfile librosa noisereduce ffmpeg-python torch
 
-### Python内に次を追加済み
-```python
-import os
-os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin"
+3. ffmpegの準備
+[ffmpeg公式サイト](https://ffmpeg.org/download.html) → ダウンロード
+
+解凍して C:\ffmpeg\bin\ffmpeg.exe に配置
+
+"ソースコード内：os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin""
+
+## 注意事項
+### 1 音声が長時間（30分以上）の場合、自動分割 で処理
+
+### 2 1ファイルずつ実施
+
+### 2 変換時に 一時ファイル（_convert.mp3） を削除済
+
+### 3 保存先：元ファイルと同じフォルダ に保存
+
+### 4 空白や日本語ファイル名対応済
+
+## 作者メモ
+### Python / GUI初心者にも分かりやすい構成を意識
+
+### 内部処理：Whisper + noisereduce + librosa
+
+## ライセンス
+- Whisper: OpenAI
+- noisereduce: MIT
+- tkinterdnd2 / librosa / soundfile: 各OSSライセンス
