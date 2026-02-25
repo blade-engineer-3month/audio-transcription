@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎤 ポップ文字起こし</title>
+  <link rel="stylesheet" href="static/css/style.css" />
+</head>
+<body>
+
+  <header>
+    <h1>🎧 音声文字起こし</h1>
+    <p>ブラウザで簡単・ポップに</p>
+  </header>
+
+  <main>
+    <div class="upload-box" id="dropZone">
+      <p>📂 ファイルをドラッグ＆ドロップ</p>
+      <p>または</p>
+      <input type="file" id="fileInput" multiple />
+      <small>
+        mp3 / m4a / wav / ogg / mp4 / avi / mov / wmv
+      </small>
+    </div>
+
+    <button id="startBtn">▶ 文字起こし開始</button>
+
+    <section class="status">
+      <p id="statusText">待機中</p>
+    </section>
+
+    <section class="result">
+      <textarea id="resultText" placeholder="ここに文字起こし結果が表示されます"></textarea>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2026 Pop Transcription</p>
+  </footer>
+
+  <script src="static/js/app.js"></script>
+</body>
+</html>
